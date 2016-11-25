@@ -2,7 +2,7 @@ import {Component, Input} from "@angular/core";
 import {ForecastResponse, getUrl} from "../api";
 import {Http, Response} from "@angular/http";
 
-import { Observable } from 'rxjs';
+import {Observable} from 'rxjs';
 
 export interface ForecastData {
   date: string;
@@ -47,17 +47,24 @@ export class Forecast {
   @Input()
   location = "Montreal";
 
+  fullData: ForecastData[] = [];
   data: ForecastData[] = [];
   state = State.Loading;
 
-  constructor(private http: Http)  {
+  constructor(private http: Http) {
 
   }
 
-  private load(){
+  private formatDate(date: Date) {
+    return date.getHours() + ":"
+      + date.getMinutes() + ":"
+      + date.getSeconds();
+  }
+
+  private load() {
     let path = "forecast?mode=json&";
     const start = "coordinate ";
-    if(this.location && this.location.substring(0, start.length).toLowerCase() === start) {
+    if (this.location && this.location.substring(0, start.length).toLowerCase() === start) {
       const coordinate = this.location.split(" ");
       path += `lat=${parseFloat(coordinate[1])}&lon=${parseFloat(coordinate[2])}`;
     } else {
@@ -66,17 +73,35 @@ export class Forecast {
 
     this.state = this.state === State.Loaded ? State.Refreshing : State.Loading;
     this.http.get(getUrl(path))
-      .map((response : Response) => response.json().data)
+      .map((response: Response) => response.json().data)
       .subscribe(res => this.update(<ForecastResponse> res), () => this.showError());
   }
 
   private update(data: ForecastResponse) {
+    if (!data.list) {
+      this.showError();
+      return;
+    }
 
+    this.fullData = data.list.map(item => ({
+      date: this.formatDate(new Date(item.dt * 1000)),
+      temperature: Math.round(item.main.temp - 273),
+      main: item.weather[0].main,
+      description: item.weather[0].description
+    }));
+
+    this.filterData();
+    this.state = State.Loaded;
   }
 
   private showError() {
     this.data = [];
     this.state = State.Error;
+  }
+
+  private filterData() {
+    const start = this.tomorrow ? 8 : 0;
+    this.data = this.fullData.slice(start, start + 8);
   }
 
   get loading() {
